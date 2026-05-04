@@ -88,7 +88,37 @@ class DocumentRepository:
         }
         sql = text(
             """
-            WITH scored AS (
+            WITH filtered AS (
+              SELECT c.id
+              FROM legal_chunks c
+              JOIN legal_documents d ON d.id = c.document_id
+              WHERE (:jurisdiction IS NULL OR d.jurisdiction = :jurisdiction)
+                AND (:court IS NULL OR d.court = :court)
+                AND (:case_type IS NULL OR d.case_type = :case_type)
+                AND (:doc_type IS NULL OR d.doc_type = :doc_type)
+            ),
+            vector_candidates AS (
+              SELECT c.id
+              FROM legal_chunks c
+              JOIN filtered f ON f.id = c.id
+              WHERE c.embedding IS NOT NULL
+              ORDER BY c.embedding <=> CAST(:embedding AS vector)
+              LIMIT (:limit * 8)
+            ),
+            keyword_candidates AS (
+              SELECT c.id
+              FROM legal_chunks c
+              JOIN filtered f ON f.id = c.id
+              WHERE to_tsvector('english', c.text) @@ plainto_tsquery('english', :query)
+              ORDER BY ts_rank_cd(to_tsvector('english', c.text), plainto_tsquery('english', :query)) DESC
+              LIMIT (:limit * 8)
+            ),
+            candidates AS (
+              SELECT id FROM vector_candidates
+              UNION
+              SELECT id FROM keyword_candidates
+            ),
+            scored AS (
               SELECT
                 c.id::text AS chunk_id,
                 d.id::text AS document_id,
@@ -107,12 +137,9 @@ class DocumentRepository:
                   ELSE 1 - (c.embedding <=> CAST(:embedding AS vector))
                 END AS vector_score,
                 ts_rank_cd(to_tsvector('english', c.text), plainto_tsquery('english', :query)) AS keyword_score
-              FROM legal_chunks c
+              FROM candidates k
+              JOIN legal_chunks c ON c.id = k.id
               JOIN legal_documents d ON d.id = c.document_id
-              WHERE (:jurisdiction IS NULL OR d.jurisdiction = :jurisdiction)
-                AND (:court IS NULL OR d.court = :court)
-                AND (:case_type IS NULL OR d.case_type = :case_type)
-                AND (:doc_type IS NULL OR d.doc_type = :doc_type)
             )
             SELECT *, (0.70 * vector_score + 0.30 * keyword_score) AS combined_score
             FROM scored

@@ -10,10 +10,11 @@ from starlette.responses import JSONResponse
 class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
     """Per-process token-window limiter; Redis can be introduced behind the same contract."""
 
-    def __init__(self, app, limit_per_minute: int, burst: int) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, app, limit_per_minute: int, burst: int, trust_proxy_headers: bool = False) -> None:  # type: ignore[no-untyped-def]
         super().__init__(app)
         self.limit = limit_per_minute
         self.burst = burst
+        self.trust_proxy_headers = trust_proxy_headers
         self.window_seconds = 60
         self.requests: dict[str, deque[float]] = defaultdict(deque)
 
@@ -21,7 +22,12 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path in {"/health", "/metrics"}:
             return await call_next(request)
 
-        client = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+        if self.trust_proxy_headers:
+            client = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        else:
+            client = ""
+        if not client:
+            client = request.client.host if request.client else "unknown"
         now = time.monotonic()
         bucket = self.requests[client]
         while bucket and now - bucket[0] > self.window_seconds:

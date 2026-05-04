@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "staging", "production"] = "development"
     log_level: str = "INFO"
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    lex_api_keys: str = ""
+    trust_proxy_headers: bool = False
 
     database_url: str = "postgresql+asyncpg://lex:lex@localhost:5432/lexorchestrator"
     auto_create_schema: bool = True
@@ -45,6 +47,10 @@ class Settings(BaseSettings):
     rate_limit_burst: int = 20
 
     supported_jurisdictions: list[str] = Field(default_factory=lambda: ["AU"])
+
+    @property
+    def parsed_api_keys(self) -> list[str]:
+        return [item.strip() for item in self.lex_api_keys.split(",") if item.strip()]
 
     @field_validator("supported_jurisdictions")
     @classmethod

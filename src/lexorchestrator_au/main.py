@@ -10,6 +10,7 @@ from lexorchestrator_au.adapters.registry import build_adapters
 from lexorchestrator_au.api.query_service import QueryService
 from lexorchestrator_au.api.routes import router
 from lexorchestrator_au.attribution.service import AttributionService, ConfidenceScorer
+from lexorchestrator_au.core.auth import APIKeyAuthMiddleware
 from lexorchestrator_au.core.cache import create_cache
 from lexorchestrator_au.core.config import get_settings
 from lexorchestrator_au.core.logging import configure_logging
@@ -78,16 +79,18 @@ def create_app() -> FastAPI:
         description="Jurisdiction-aware LLM orchestration and legal RAG backend for Australian law firms.",
         lifespan=lifespan,
     )
+    app.add_middleware(APIKeyAuthMiddleware, api_keys=settings.parsed_api_keys)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         InMemoryRateLimitMiddleware,
         limit_per_minute=settings.rate_limit_per_minute,
         burst=settings.rate_limit_burst,
+        trust_proxy_headers=settings.trust_proxy_headers,
     )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
+        allow_credentials="*" not in settings.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )

@@ -99,6 +99,9 @@ Key environment variables:
 | `LLAMA_API_URL` | Optional OpenAI-compatible local Llama/vLLM/Ollama endpoint |
 | `EMBEDDING_PROVIDER` | `hash` for local deterministic dev embeddings or `openai` |
 | `RATE_LIMIT_PER_MINUTE` | Per-process request limit |
+| `LEX_API_KEYS` | Comma-separated API keys protecting `/query`, `/feedback`, and `/metrics`; leave unset only for local dev |
+| `TRUST_PROXY_HEADERS` | Trust `x-forwarded-for` only when behind a configured trusted proxy |
+| `CORS_ORIGINS` | Restrict firm portal origins; wildcard is dev-only |
 
 ## Data model
 
@@ -114,7 +117,7 @@ Before using with real firms:
 1. Replace mock data with licensed Australian legal corpora and maintain source/version metadata.
 2. Move schema changes to Alembic migrations; `auto_create_schema` is beta convenience.
 3. Use provider-specific model allowlists and client-level data retention controls.
-4. Put the service behind auth, TLS, WAF, and tenant isolation.
+4. Set `LEX_API_KEYS`, restrict CORS, and put the service behind TLS, WAF, and tenant isolation.
 5. Add evaluation sets for hallucination, citation accuracy, and jurisdiction leakage.
 6. Tune pgvector indexes (`lists`, `probes`) for 100k+ documents and expected traffic.
 7. Export `query_runs` + `feedback_events` into review queues before fine-tuning.

@@ -72,7 +72,7 @@ async def feedback(
         logger.exception("feedback_persistence_failed")
         return FeedbackResponse(
             feedback_id=f"not-persisted-{uuid.uuid4()}",
-            trace_id=payload.trace_id,
+            trace_id=str(payload.trace_id) if payload.trace_id else None,
             status="degraded_not_stored",
         )
 

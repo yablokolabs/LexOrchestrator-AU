@@ -49,14 +49,14 @@ class FeedbackService:
     async def record_feedback(
         self,
         *,
-        trace_id: str | None,
+        trace_id: str | uuid.UUID | None,
         rating: str,
         comment: str | None,
         corrected_answer: str | None,
         user_query: str | None = None,
         model_response: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        trace_uuid = uuid.UUID(trace_id) if trace_id else None
+        trace_uuid = trace_id if isinstance(trace_id, uuid.UUID) else uuid.UUID(trace_id) if trace_id else None
         async with self.session_factory() as session:
             if trace_uuid:
                 query_run = await session.scalar(select(QueryRun).where(QueryRun.trace_id == trace_uuid))
@@ -79,4 +79,4 @@ class FeedbackService:
             session.add(event)
             await session.commit()
             FEEDBACK_EVENTS.labels(rating=rating).inc()
-            return {"feedback_id": str(event.id), "trace_id": trace_id, "status": "recorded"}
+            return {"feedback_id": str(event.id), "trace_id": str(trace_id) if trace_id else None, "status": "recorded"}

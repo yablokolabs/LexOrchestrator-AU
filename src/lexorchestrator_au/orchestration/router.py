@@ -41,6 +41,6 @@ class ModelRouter:
             )
         return RoutePlan(
             query_type=query_type,
-            providers=["llama", "openai", "anthropic"],
-            rationale="routine research can use lower-cost local model before managed fallbacks",
+            providers=["openai", "anthropic", "llama"],
+            rationale="routine research uses managed models first; local/extractive Llama is last-only degradation",
         )

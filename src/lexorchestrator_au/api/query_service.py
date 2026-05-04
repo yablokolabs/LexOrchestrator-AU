@@ -43,7 +43,12 @@ class QueryService:
         if not results:
             RETRIEVAL_EMPTY.inc()
 
-        context_blocks = self.attribution.context_blocks(results, max_blocks=self.settings.retrieval_limit)
+        citations = self.attribution.build_citations(results, max_citations=request.max_citations)
+        context_blocks = self.attribution.context_blocks(
+            results,
+            max_blocks=self.settings.retrieval_limit,
+            citations=citations,
+        )
         llm_response, metadata = await self.orchestrator.generate(
             query=request.query,
             context_blocks=context_blocks,
@@ -51,8 +56,10 @@ class QueryService:
             trace_id=trace_id,
             explicit_query_type=request.query_type,
         )
-        citations = self.attribution.build_citations(results, max_citations=request.max_citations)
+        citation_validation = self.attribution.validate_answer_citations(llm_response.answer, citations)
         confidence = self.confidence.score(results, citations, llm_response.degraded)
+        if citation_validation["unsupported_source_ids"]:
+            confidence = min(confidence, 0.55)
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
         QUERY_LATENCY.observe(latency_ms / 1000)
 
@@ -69,6 +76,7 @@ class QueryService:
                 **metadata,
                 "client_matter_id": request.client_matter_id,
                 "retrieved_chunks": len(results),
+                "citation_validation": citation_validation,
                 "token_usage": llm_response.token_usage,
                 "finish_reason": llm_response.finish_reason,
             },

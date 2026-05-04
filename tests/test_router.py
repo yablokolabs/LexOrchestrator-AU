@@ -14,3 +14,11 @@ def test_router_prefers_openai_for_drafting() -> None:
 
     assert plan.query_type == "drafting"
     assert plan.providers[0] == "openai"
+
+
+def test_routine_research_keeps_extract_fallback_last() -> None:
+    plan = ModelRouter().route("What are the key legal principles?")
+
+    assert plan.query_type == "legal_research"
+    assert plan.providers[:2] == ["openai", "anthropic"]
+    assert plan.providers[-1] == "llama"

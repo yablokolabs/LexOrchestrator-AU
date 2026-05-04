@@ -1,4 +1,5 @@
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -48,7 +49,7 @@ class QueryResponse(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    trace_id: str | None = None
+    trace_id: UUID | None = None
     rating: Literal["correct", "incorrect", "partially_correct", "unsafe", "irrelevant"]
     comment: str | None = Field(default=None, max_length=4000)
     corrected_answer: str | None = Field(default=None, max_length=12000)

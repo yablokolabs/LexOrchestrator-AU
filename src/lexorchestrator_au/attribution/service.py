@@ -46,13 +46,36 @@ class AttributionService:
                 break
         return citations
 
-    def context_blocks(self, results: list[RetrievalResult], max_blocks: int) -> list[dict[str, object]]:
+    def context_blocks(
+        self,
+        results: list[RetrievalResult],
+        max_blocks: int,
+        citations: list[dict[str, object]] | None = None,
+    ) -> list[dict[str, object]]:
         blocks: list[dict[str, object]] = []
+        if citations is not None:
+            by_chunk = {result.chunk_id: result for result in results}
+            for citation in citations[:max_blocks]:
+                result = by_chunk.get(str(citation["chunk_id"]))
+                if result is None:
+                    continue
+                payload = asdict(result)
+                payload["citation_id"] = citation["citation_id"]
+                blocks.append(payload)
+            return blocks
+
         for citation_id, result in enumerate(results[:max_blocks], start=1):
             payload = asdict(result)
             payload["citation_id"] = f"C{citation_id}"
             blocks.append(payload)
         return blocks
+
+    @staticmethod
+    def validate_answer_citations(answer: str, citations: list[dict[str, object]]) -> dict[str, object]:
+        cited = sorted(set(re.findall(r"\[?(C\d+)\]?", answer)))
+        allowed = {str(citation["citation_id"]) for citation in citations}
+        unsupported = [citation_id for citation_id in cited if citation_id not in allowed]
+        return {"cited_source_ids": cited, "unsupported_source_ids": unsupported, "valid": not unsupported}
 
 
 class ConfidenceScorer:
