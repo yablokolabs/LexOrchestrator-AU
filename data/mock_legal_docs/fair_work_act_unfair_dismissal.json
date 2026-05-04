@@ -1,0 +1,15 @@
+{
+  "source_uri": "mock://au/cth/fair-work-act-2009/unfair-dismissal",
+  "title": "Fair Work Act 2009 (Cth) — Unfair Dismissal Extract",
+  "jurisdiction": "AU",
+  "court": "Fair Work Commission",
+  "case_type": "employment",
+  "doc_type": "statute",
+  "citation": "Fair Work Act 2009 (Cth)",
+  "effective_date": "2026-01-01",
+  "metadata": {
+    "mock": true,
+    "publisher": "LexOrchestrator-AU sample dataset"
+  },
+  "text": "Section 385\nA person has been unfairly dismissed if the Fair Work Commission is satisfied that the person has been dismissed, the dismissal was harsh, unjust or unreasonable, the dismissal was not consistent with the Small Business Fair Dismissal Code, and the dismissal was not a case of genuine redundancy.\n\nSection 387\nIn considering whether a dismissal was harsh, unjust or unreasonable, the Commission must take into account whether there was a valid reason related to capacity or conduct, whether the person was notified of that reason, whether the person was given an opportunity to respond, any unreasonable refusal to allow a support person, warnings about unsatisfactory performance, the size of the employer's enterprise, human resource management expertise, and any other matters the Commission considers relevant.\n\nSection 389\nA dismissal is a case of genuine redundancy if the employer no longer required the person's job to be performed by anyone because of operational changes, and the employer complied with any obligation in a modern award or enterprise agreement to consult about the redundancy. A dismissal is not genuine redundancy if it would have been reasonable in all the circumstances for the person to be redeployed within the employer's enterprise or an associated entity."
+}

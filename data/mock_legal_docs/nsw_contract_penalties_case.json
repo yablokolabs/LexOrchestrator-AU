@@ -1,0 +1,15 @@
+{
+  "source_uri": "mock://au/nsw/supreme-court/contract-penalties",
+  "title": "Example NSW Supreme Court Contract Penalties Decision",
+  "jurisdiction": "AU",
+  "court": "NSW Supreme Court",
+  "case_type": "contract",
+  "doc_type": "case",
+  "citation": "Example Pty Ltd v Sample Holdings Pty Ltd [2025] NSWSC 101",
+  "effective_date": "2025-06-14",
+  "metadata": {
+    "mock": true,
+    "note": "Synthetic authority for development only"
+  },
+  "text": "Background\nThe proceeding concerned a services agreement containing a liquidated damages clause triggered by late delivery of a software migration project. The supplier argued the amount was a penalty and unenforceable.\n\nReasons\nThe Court treated the penalty question as turning on substance rather than form. A clause may be penal where the stipulated sum is out of all proportion to the legitimate interests of the innocent party in performance. The Court considered contemporaneous evidence of expected loss, commercial bargaining power, and whether the clause protected a broader legitimate interest such as continuity of operations.\n\nHolding\nOn the facts, the clause was not penal. The amount was negotiated between sophisticated parties, was connected to forecast operational disruption, and was not extravagant when assessed at contract formation. The Court cautioned that boilerplate assertions of commercial justification will not replace evidence."
+}

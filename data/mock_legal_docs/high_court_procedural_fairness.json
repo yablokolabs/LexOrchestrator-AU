@@ -1,0 +1,15 @@
+{
+  "source_uri": "mock://au/hca/administrative-law/procedural-fairness",
+  "title": "Example High Court Administrative Law Procedural Fairness Decision",
+  "jurisdiction": "AU",
+  "court": "High Court of Australia",
+  "case_type": "administrative",
+  "doc_type": "case",
+  "citation": "Minister for Example Affairs v Citizen [2024] HCA 22",
+  "effective_date": "2024-09-03",
+  "metadata": {
+    "mock": true,
+    "note": "Synthetic authority for development only"
+  },
+  "text": "Issue\nThe appeal concerned whether a decision-maker denied procedural fairness by relying on adverse country information that was not disclosed to the applicant before refusal of a visa-related application.\n\nPrinciple\nProcedural fairness generally requires disclosure of credible, relevant and significant adverse material where the affected person would not otherwise know of the issue and has a meaningful opportunity to respond. The content of the obligation depends on the statutory scheme, the nature of the power, and the practical consequences for the person affected.\n\nDisposition\nThe Court held that fairness was denied. The undisclosed material was central to the decision and the applicant could have made submissions addressing its reliability and application. The matter was remitted for determination according to law."
+}
