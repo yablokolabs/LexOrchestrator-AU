@@ -1,10 +1,15 @@
+import re
 from dataclasses import dataclass
+
+_DRAFTING_RE = re.compile(r"\b(?:draft|clause|letter|submission|pleading)\b", re.I)
+_CASE_LAW_RE = re.compile(r"\b(?:case|authority|precedent|court|held|judgment|judgement)\b", re.I)
+_STATUTORY_RE = re.compile(r"\b(?:act|section|regulation|statute|schedule)\b", re.I)
 
 
 @dataclass(frozen=True, slots=True)
 class RoutePlan:
     query_type: str
-    providers: list[str]
+    providers: tuple[str, ...]
     rationale: str
 
 
@@ -14,12 +19,11 @@ class ModelRouter:
     def classify(self, query: str, explicit_type: str | None = None) -> str:
         if explicit_type:
             return explicit_type
-        lower = query.lower()
-        if any(term in lower for term in ("draft", "clause", "letter", "submission", "pleading")):
+        if _DRAFTING_RE.search(query):
             return "drafting"
-        if any(term in lower for term in ("case", "authority", "precedent", "court", "held", "judgment")):
+        if _CASE_LAW_RE.search(query):
             return "case_law"
-        if any(term in lower for term in ("act", "section", "regulation", "statute", "schedule")):
+        if _STATUTORY_RE.search(query):
             return "statutory_interpretation"
         if len(query.split()) > 80:
             return "complex_analysis"
@@ -30,17 +34,17 @@ class ModelRouter:
         if query_type in {"case_law", "complex_analysis", "statutory_interpretation"}:
             return RoutePlan(
                 query_type=query_type,
-                providers=["anthropic", "openai", "llama"],
+                providers=("anthropic", "openai", "llama"),
                 rationale="complex legal reasoning benefits from long-context legal synthesis first",
             )
         if query_type == "drafting":
             return RoutePlan(
                 query_type=query_type,
-                providers=["openai", "anthropic", "llama"],
+                providers=("openai", "anthropic", "llama"),
                 rationale="drafting tasks prioritise structured generation and JSON compliance",
             )
         return RoutePlan(
             query_type=query_type,
-            providers=["openai", "anthropic", "llama"],
+            providers=("openai", "anthropic", "llama"),
             rationale="routine research uses managed models first; local/extractive Llama is last-only degradation",
         )

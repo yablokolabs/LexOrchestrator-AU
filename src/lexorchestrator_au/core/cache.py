@@ -1,10 +1,16 @@
 import asyncio
 import json
+import logging
 import time
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from redis.asyncio import Redis
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_MAX_ENTRIES = 10_000
 
 
 class AsyncCache:
@@ -17,6 +23,9 @@ class AsyncCache:
     async def close(self) -> None:
         return None
 
+    async def is_healthy(self) -> bool:
+        return True
+
 
 class NullCache(AsyncCache):
     async def get_json(self, key: str) -> Any | None:
@@ -25,11 +34,15 @@ class NullCache(AsyncCache):
     async def set_json(self, key: str, value: Any, ttl_seconds: int) -> None:
         return None
 
+    async def is_healthy(self) -> bool:
+        return False
+
 
 class InMemoryTTLCache(AsyncCache):
-    def __init__(self) -> None:
-        self._values: dict[str, tuple[float, Any]] = {}
+    def __init__(self, max_entries: int = _DEFAULT_MAX_ENTRIES) -> None:
+        self._values: OrderedDict[str, tuple[float, Any]] = OrderedDict()
         self._lock = asyncio.Lock()
+        self._max_entries = max_entries
 
     async def get_json(self, key: str) -> Any | None:
         async with self._lock:
@@ -40,11 +53,15 @@ class InMemoryTTLCache(AsyncCache):
             if expires_at < time.monotonic():
                 self._values.pop(key, None)
                 return None
+            self._values.move_to_end(key)
             return value
 
     async def set_json(self, key: str, value: Any, ttl_seconds: int) -> None:
         async with self._lock:
             self._values[key] = (time.monotonic() + ttl_seconds, value)
+            self._values.move_to_end(key)
+            while len(self._values) > self._max_entries:
+                self._values.popitem(last=False)
 
 
 class RedisTTLCache(AsyncCache):
@@ -55,8 +72,6 @@ class RedisTTLCache(AsyncCache):
         raw = await self._redis.get(key)
         if raw is None:
             return None
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8")
         return json.loads(raw)
 
     async def set_json(self, key: str, value: Any, ttl_seconds: int) -> None:
@@ -65,16 +80,30 @@ class RedisTTLCache(AsyncCache):
     async def close(self) -> None:
         await self._redis.aclose()
 
+    async def is_healthy(self) -> bool:
+        try:
+            result: bool = await self._redis.ping()
+            return result
+        except Exception:
+            return False
 
-async def create_cache(redis_url: str | None) -> AsyncCache:
+
+async def create_cache(
+    redis_url: str | None, max_entries: int = _DEFAULT_MAX_ENTRIES
+) -> AsyncCache:
     if not redis_url:
-        return InMemoryTTLCache()
+        return InMemoryTTLCache(max_entries=max_entries)
     try:
         redis = Redis.from_url(redis_url, encoding="utf-8", decode_responses=True)
         await redis.ping()
+        logger.info("redis_cache_connected", extra={"url": redis_url.split("@")[-1]})
         return RedisTTLCache(redis)
     except Exception:
-        return InMemoryTTLCache()
+        logger.warning(
+            "redis_unavailable_falling_back_to_in_memory_cache",
+            extra={"url": redis_url.split("@")[-1]},
+        )
+        return InMemoryTTLCache(max_entries=max_entries)
 
 
 async def get_or_set_json(

@@ -1,10 +1,11 @@
 from typing import Any, Literal
-from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class QueryRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     query: str = Field(min_length=3, max_length=8000)
     jurisdiction: str = Field(default="AU", min_length=2, max_length=8)
     court: str | None = Field(default=None, max_length=128)
@@ -20,6 +21,14 @@ class QueryRequest(BaseModel):
         return value.upper()
 
 
+class CitationTrace(BaseModel):
+    """Typed trace metadata for attribution transparency."""
+
+    rank: int
+    vector_score: float
+    keyword_score: float
+
+
 class Citation(BaseModel):
     citation_id: str
     doc_id: str
@@ -33,7 +42,7 @@ class Citation(BaseModel):
     section: str
     snippet: str
     score: float
-    trace: dict[str, Any]
+    trace: CitationTrace
 
 
 class QueryResponse(BaseModel):
@@ -49,7 +58,9 @@ class QueryResponse(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    trace_id: UUID | None = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    trace_id: str | None = None
     rating: Literal["correct", "incorrect", "partially_correct", "unsafe", "irrelevant"]
     comment: str | None = Field(default=None, max_length=4000)
     corrected_answer: str | None = Field(default=None, max_length=12000)

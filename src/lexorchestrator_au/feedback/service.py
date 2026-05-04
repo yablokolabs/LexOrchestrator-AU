@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -7,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from lexorchestrator_au.core.metrics import FEEDBACK_EVENTS
 from lexorchestrator_au.db.models import FeedbackEvent, QueryRun
+
+logger = logging.getLogger(__name__)
 
 
 class FeedbackService:
@@ -56,10 +59,22 @@ class FeedbackService:
         user_query: str | None = None,
         model_response: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        trace_uuid = trace_id if isinstance(trace_id, uuid.UUID) else uuid.UUID(trace_id) if trace_id else None
+        try:
+            trace_uuid = (
+                trace_id
+                if isinstance(trace_id, uuid.UUID)
+                else uuid.UUID(trace_id)
+                if trace_id
+                else None
+            )
+        except ValueError:
+            logger.warning("invalid_trace_id_in_feedback", extra={"trace_id": str(trace_id)[:100]})
+            trace_uuid = None
         async with self.session_factory() as session:
             if trace_uuid:
-                query_run = await session.scalar(select(QueryRun).where(QueryRun.trace_id == trace_uuid))
+                query_run = await session.scalar(
+                    select(QueryRun).where(QueryRun.trace_id == trace_uuid)
+                )
                 if query_run:
                     query_run.feedback_rating = rating
                     query_run.feedback_comment = comment
@@ -79,4 +94,8 @@ class FeedbackService:
             session.add(event)
             await session.commit()
             FEEDBACK_EVENTS.labels(rating=rating).inc()
-            return {"feedback_id": str(event.id), "trace_id": str(trace_id) if trace_id else None, "status": "recorded"}
+            return {
+                "feedback_id": str(event.id),
+                "trace_id": str(trace_id) if trace_id else None,
+                "status": "recorded",
+            }

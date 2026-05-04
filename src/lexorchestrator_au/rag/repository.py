@@ -18,8 +18,15 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentRepository:
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        vector_weight: float = 0.70,
+        keyword_weight: float = 0.30,
+    ) -> None:
         self.session_factory = session_factory
+        self.vector_weight = vector_weight
+        self.keyword_weight = keyword_weight
 
     async def replace_document(
         self,
@@ -85,6 +92,8 @@ class DocumentRepository:
             "case_type": filters.case_type,
             "doc_type": filters.doc_type,
             "limit": limit,
+            "vector_weight": self.vector_weight,
+            "keyword_weight": self.keyword_weight,
         }
         sql = text(
             """
@@ -141,7 +150,7 @@ class DocumentRepository:
               JOIN legal_chunks c ON c.id = k.id
               JOIN legal_documents d ON d.id = c.document_id
             )
-            SELECT *, (0.70 * vector_score + 0.30 * keyword_score) AS combined_score
+            SELECT *, (:vector_weight * vector_score + :keyword_weight * keyword_score) AS combined_score
             FROM scored
             ORDER BY combined_score DESC, keyword_score DESC
             LIMIT :limit
@@ -152,7 +161,7 @@ class DocumentRepository:
                 rows = (await session.execute(sql, params)).mappings().all()
         except Exception:
             logger.exception("hybrid_search_failed")
-            return []
+            raise  # Don't swallow — let the caller handle the error
 
         return [self._row_to_result(row) for row in rows]
 

@@ -4,7 +4,14 @@ import random
 from dataclasses import asdict
 from typing import Any
 
-from lexorchestrator_au.adapters.base import AdapterError, LLMAdapter, LLMRequest, LLMResponse
+from lexorchestrator_au.adapters.base import (
+    APIDriftError,
+    LLMAdapter,
+    LLMRequest,
+    LLMResponse,
+    NonRetryableError,
+    ProviderUnavailable,
+)
 from lexorchestrator_au.core.config import Settings
 from lexorchestrator_au.core.metrics import LLM_FAILURES, LLM_REQUESTS
 from lexorchestrator_au.orchestration.circuit_breaker import CircuitBreaker
@@ -16,7 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class LLMOrchestrator:
-    def __init__(self, adapters: dict[str, LLMAdapter], router: ModelRouter, settings: Settings) -> None:
+    def __init__(
+        self, adapters: dict[str, LLMAdapter], router: ModelRouter, settings: Settings
+    ) -> None:
         self.adapters = adapters
         self.router = router
         self.settings = settings
@@ -38,7 +47,6 @@ class LLMOrchestrator:
     ) -> tuple[LLMResponse, dict[str, Any]]:
         route = self.router.route(query, explicit_query_type)
         request = LLMRequest(
-            query=query,
             context_blocks=context_blocks,
             jurisdiction=jurisdiction,
             query_type=route.query_type,
@@ -54,22 +62,34 @@ class LLMOrchestrator:
                 errors.append(f"{provider}:unavailable")
                 continue
             breaker = self.breakers[provider]
-            if not breaker.allow_request():
+            if not await breaker.allow_request():
                 errors.append(f"{provider}:circuit_open")
                 continue
 
             for attempt in range(1, self.settings.llm_retry_attempts + 1):
                 try:
-                    async with asyncio.timeout(self.settings.llm_timeout_seconds):
+                    # Use a slightly larger outer timeout to let httpx handle its own timeout cleanly
+                    async with asyncio.timeout(self.settings.llm_timeout_seconds * 1.15):
                         response = await adapter.generate(request)
-                    breaker.record_success()
+                    await breaker.record_success()
                     LLM_REQUESTS.labels(provider=provider, status="success").inc()
                     answer, metadata = normalize_answer(response.answer)
                     response.answer = answer
                     metadata.update({"route": asdict(route), "attempt": attempt, "errors": errors})
                     return response, metadata
-                except Exception as exc:  # provider SDKs raise provider-specific subclasses
-                    breaker.record_failure()
+                except (NonRetryableError, ProviderUnavailable, APIDriftError) as exc:
+                    # Deterministic errors — retrying won't help
+                    await breaker.record_failure()
+                    LLM_FAILURES.labels(provider=provider).inc()
+                    LLM_REQUESTS.labels(provider=provider, status="failure").inc()
+                    errors.append(f"{provider}:attempt_{attempt}:{exc.__class__.__name__}")
+                    logger.warning(
+                        "llm_provider_non_retryable",
+                        extra={"trace_id": trace_id, "provider": provider, "error": str(exc)[:200]},
+                    )
+                    break  # Don't retry
+                except Exception as exc:
+                    await breaker.record_failure()
                     LLM_FAILURES.labels(provider=provider).inc()
                     LLM_REQUESTS.labels(provider=provider, status="failure").inc()
                     errors.append(f"{provider}:attempt_{attempt}:{exc.__class__.__name__}")
@@ -77,7 +97,7 @@ class LLMOrchestrator:
                         "llm_provider_failed",
                         extra={"trace_id": trace_id, "provider": provider, "attempt": attempt},
                     )
-                    if isinstance(exc, AdapterError) and attempt >= self.settings.llm_retry_attempts:
+                    if attempt >= self.settings.llm_retry_attempts:
                         break
                     await asyncio.sleep(self._backoff(attempt))
 
@@ -87,9 +107,12 @@ class LLMOrchestrator:
 
     def _backoff(self, attempt: int) -> float:
         base = self.settings.llm_retry_base_delay_seconds
-        return min(base * (2 ** (attempt - 1)) + random.uniform(0, base), 3.0)
+        delay = base * (2 ** (attempt - 1)) + random.uniform(0, base)  # noqa: S311  # nosec B311
+        return float(min(delay, self.settings.llm_max_backoff_seconds))
 
-    def _graceful_fallback(self, context_blocks: list[dict[str, Any]], errors: list[str]) -> LLMResponse:
+    def _graceful_fallback(
+        self, context_blocks: list[dict[str, Any]], errors: list[str]
+    ) -> LLMResponse:
         if context_blocks:
             answer = (
                 "The managed LLM providers were unavailable, so LexOrchestrator-AU returned an extractive, "

@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from lexorchestrator_au.adapters.base import APIDriftError, LLMRequest, LLMResponse
+from lexorchestrator_au.adapters.base import AdapterError, APIDriftError, LLMRequest, LLMResponse
 
 
 class LlamaAdapterV1:
@@ -21,10 +21,24 @@ class LlamaAdapterV1:
         self.api_url = api_url.rstrip("/") if api_url else None
         self.model = model
         self.timeout_seconds = timeout_seconds
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def is_available(self) -> bool:
-        return True
+        return True  # Always available as extractive fallback
+
+    @property
+    def is_llm_backed(self) -> bool:
+        """Whether this adapter uses a real LLM (vs extractive fallback)."""
+        return bool(self.api_url)
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout_seconds,
+                limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            )
+        return self._client
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
         if not self.api_url:
@@ -38,11 +52,14 @@ class LlamaAdapterV1:
             ],
             "temperature": 0.1,
         }
+        client = await self._get_client()
         start = time.perf_counter()
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+        try:
             response = await client.post(f"{self.api_url}/v1/chat/completions", json=payload)
             response.raise_for_status()
             data = response.json()
+        except httpx.TimeoutException as exc:
+            raise AdapterError(f"Llama request timed out: {exc}") from exc
 
         answer = self._parse_common_chat_response(data)
         return LLMResponse(
@@ -83,12 +100,16 @@ class LlamaAdapterV1:
             finish_reason="extractive_fallback",
         )
 
+    async def aclose(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
     @staticmethod
     def _parse_common_chat_response(data: dict[str, Any]) -> str:
         try:
             return str(data["choices"][0]["message"]["content"]).strip()
         except (KeyError, IndexError, TypeError) as exc:
-            # Ollama generate/chat compatibility.
             answer = data.get("message", {}).get("content") or data.get("response")
             if isinstance(answer, str) and answer.strip():
                 return answer.strip()

@@ -1,3 +1,1 @@
-"""LexOrchestrator-AU backend package."""
-
-__version__ = "0.1.0"
+"""LexOrchestrator-AU: Jurisdiction-aware LLM orchestration for Australian law firms."""

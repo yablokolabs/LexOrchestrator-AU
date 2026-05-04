@@ -18,7 +18,13 @@ def normalize_answer(text: str) -> tuple[str, dict[str, Any]]:
         return stripped, {"limitations": []}
 
     if isinstance(payload, dict):
-        answer = payload.get("answer") or payload.get("response") or stripped
-        metadata = {key: value for key, value in payload.items() if key not in {"answer", "response"}}
+        answer = payload.get("answer")
+        if answer is None:
+            answer = payload.get("response")
+        if answer is None:
+            answer = stripped
+        metadata = {
+            key: value for key, value in payload.items() if key not in {"answer", "response"}
+        }
         return str(answer).strip(), metadata
     return stripped, {"limitations": []}

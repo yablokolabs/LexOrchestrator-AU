@@ -23,12 +23,14 @@ async def initialise_database(engine: AsyncEngine, settings: Settings) -> None:
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
+        # HNSW index: works on empty tables (no training required), better recall
+        # than IVFFlat for filtered queries, and self-maintaining.
         await conn.execute(
             text(
                 """
-                CREATE INDEX IF NOT EXISTS ix_legal_chunks_embedding_ivfflat
-                ON legal_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)
-                WHERE embedding IS NOT NULL
+                CREATE INDEX IF NOT EXISTS ix_legal_chunks_embedding_hnsw
+                ON legal_chunks USING hnsw (embedding vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64)
                 """
             )
         )

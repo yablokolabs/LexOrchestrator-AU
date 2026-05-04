@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Response]) -> Response:
+    async def dispatch(  # type: ignore[override]
+        self, request: Request, call_next: Callable[[Request], Response]
+    ) -> Response:
         incoming_trace_id = request.headers.get("x-trace-id")
         try:
             trace_id = str(uuid.UUID(incoming_trace_id)) if incoming_trace_id else str(uuid.uuid4())
@@ -18,7 +20,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             trace_id = str(uuid.uuid4())
         request.state.trace_id = trace_id
         start = time.perf_counter()
-        response = await call_next(request)
+        response: Response = await call_next(request)  # type: ignore[misc]
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         response.headers["x-trace-id"] = trace_id
         logger.info(

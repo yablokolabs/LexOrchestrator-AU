@@ -28,8 +28,8 @@ async def run(data_dir: Path | None = None) -> None:
         )
         target_dir = data_dir or PROJECT_ROOT / "data" / "mock_legal_docs"
         results = await pipeline.ingest_json_dir(target_dir)
-        for result in results:
-            print(result)
+        for _result in results:
+            pass
     finally:
         await cache.close()
         await engine.dispose()

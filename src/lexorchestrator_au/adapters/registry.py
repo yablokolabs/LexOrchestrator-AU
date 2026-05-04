@@ -11,6 +11,7 @@ def build_adapters(settings: Settings) -> dict[str, LLMAdapter]:
             api_key=settings.anthropic_api_key,
             model=settings.anthropic_model,
             timeout_seconds=settings.llm_timeout_seconds,
+            max_tokens=settings.anthropic_max_tokens,
         ),
         OpenAIChatAdapterV1(
             api_key=settings.openai_api_key,
@@ -24,3 +25,10 @@ def build_adapters(settings: Settings) -> dict[str, LLMAdapter]:
         ),
     ]
     return {adapter.name: adapter for adapter in adapters}
+
+
+async def close_adapters(adapters: dict[str, LLMAdapter]) -> None:
+    """Shut down all adapter HTTP clients on app teardown."""
+    for adapter in adapters.values():
+        if hasattr(adapter, "aclose"):
+            await adapter.aclose()

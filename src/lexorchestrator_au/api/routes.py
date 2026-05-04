@@ -19,13 +19,14 @@ from lexorchestrator_au.feedback.service import FeedbackService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/v1")
+legacy_router = APIRouter()
+
 QueryServiceDep = Annotated[QueryService, Depends(get_query_service)]
 FeedbackServiceDep = Annotated[FeedbackService, Depends(get_feedback_service)]
 
 
-@router.get("/health", response_model=HealthResponse)
-async def health(request: Request) -> HealthResponse:
+async def _health(request: Request) -> HealthResponse:
     database = "unknown"
     try:
         async with request.app.state.session_factory() as session:
@@ -35,7 +36,12 @@ async def health(request: Request) -> HealthResponse:
         database = "degraded"
 
     cache = getattr(request.app.state, "cache", None)
-    redis_state = cache.__class__.__name__ if cache else "not_configured"
+    if cache is not None:
+        redis_healthy = await cache.is_healthy()
+        redis_state = "ok" if redis_healthy else "degraded"
+    else:
+        redis_state = "not_configured"
+
     adapters = getattr(request.app.state, "adapters", {})
     model_states = {
         name: ("available" if adapter.is_available else "not_configured")
@@ -50,21 +56,14 @@ async def health(request: Request) -> HealthResponse:
     )
 
 
-@router.post("/query", response_model=QueryResponse)
-async def query(
-    payload: QueryRequest,
-    request: Request,
-    service: QueryServiceDep,
+async def _query(
+    payload: QueryRequest, request: Request, service: QueryServiceDep
 ) -> QueryResponse:
     trace_id = getattr(request.state, "trace_id", None)
     return await service.query(payload, trace_id=trace_id)
 
 
-@router.post("/feedback", response_model=FeedbackResponse)
-async def feedback(
-    payload: FeedbackRequest,
-    service: FeedbackServiceDep,
-) -> FeedbackResponse:
+async def _feedback(payload: FeedbackRequest, service: FeedbackServiceDep) -> FeedbackResponse:
     try:
         result = await service.record_feedback(**payload.model_dump())
         return FeedbackResponse(**result)
@@ -77,6 +76,18 @@ async def feedback(
         )
 
 
-@router.get("/metrics")
-async def metrics() -> Response:
+async def _metrics() -> Response:
     return Response(content=metrics_bytes(), media_type="text/plain; version=0.0.4")
+
+
+# Register versioned routes
+router.get("/health", response_model=HealthResponse)(_health)
+router.post("/query", response_model=QueryResponse)(_query)
+router.post("/feedback", response_model=FeedbackResponse)(_feedback)
+router.get("/metrics")(_metrics)
+
+# Legacy unversioned routes (backward compatibility)
+legacy_router.get("/health", response_model=HealthResponse, include_in_schema=False)(_health)
+legacy_router.post("/query", response_model=QueryResponse, include_in_schema=False)(_query)
+legacy_router.post("/feedback", response_model=FeedbackResponse, include_in_schema=False)(_feedback)
+legacy_router.get("/metrics", include_in_schema=False)(_metrics)

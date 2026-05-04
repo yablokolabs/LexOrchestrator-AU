@@ -4,9 +4,11 @@ from typing import Any
 import httpx
 
 from lexorchestrator_au.adapters.base import (
+    AdapterError,
     APIDriftError,
     LLMRequest,
     LLMResponse,
+    NonRetryableError,
     ProviderUnavailable,
 )
 
@@ -19,10 +21,20 @@ class OpenAIChatAdapterV1:
         self.api_key = api_key
         self.model = model
         self.timeout_seconds = timeout_seconds
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def is_available(self) -> bool:
         return bool(self.api_key)
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout_seconds,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            )
+        return self._client
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
         if not self.api_key:
@@ -37,16 +49,18 @@ class OpenAIChatAdapterV1:
                 {"role": "user", "content": request.user_prompt},
             ],
         }
-        headers = {"Authorization": f"Bearer {self.api_key}"}
+        client = await self._get_client()
         start = time.perf_counter()
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+        try:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
-                headers=headers,
                 json=payload,
             )
-            response.raise_for_status()
-            data = response.json()
+        except httpx.TimeoutException as exc:
+            raise AdapterError(f"OpenAI request timed out: {exc}") from exc
+
+        self._handle_http_error(response)
+        data = response.json()
 
         try:
             choice = data["choices"][0]
@@ -65,7 +79,25 @@ class OpenAIChatAdapterV1:
             provider=self.name,
             model=self.model,
             raw={"id": data.get("id"), "adapter_version": self.version},
-            token_usage={k: int(v) for k, v in usage.items() if isinstance(v, int)},
+            token_usage={
+                k: int(v)
+                for k, v in usage.items()
+                if isinstance(v, (int, float)) and not isinstance(v, bool)
+            },
             latency_ms=(time.perf_counter() - start) * 1000,
             finish_reason=finish_reason,
         )
+
+    async def aclose(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
+    @staticmethod
+    def _handle_http_error(response: httpx.Response) -> None:
+        if response.is_success:
+            return
+        status = response.status_code
+        if 400 <= status < 500 and status != 429:
+            raise NonRetryableError(f"OpenAI returned {status}: {response.text[:300]}")
+        response.raise_for_status()

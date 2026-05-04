@@ -13,3 +13,14 @@ __pycache__
 .coverage
 htmlcov
 .DS_Store
+tests/
+docker/
+.github/
+.idea/
+.vscode/
+dist/
+build/
+*.egg-info/
+exports/
+*.md
+!README.md

@@ -24,7 +24,11 @@ class SimpleLegalReranker:
                 filter_bonus += 0.08
             if filters.case_type and result.case_type == filters.case_type:
                 filter_bonus += 0.08
-            if filters.jurisdiction and result.jurisdiction.upper() == filters.jurisdiction.upper():
+            if (
+                filters.jurisdiction
+                and result.jurisdiction
+                and result.jurisdiction.upper() == filters.jurisdiction.upper()
+            ):
                 filter_bonus += 0.04
             return result.combined_score + min(exact_hits * 0.015, 0.15) + filter_bonus
 

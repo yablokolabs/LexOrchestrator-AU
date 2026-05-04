@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 
@@ -9,6 +10,8 @@ from lexorchestrator_au.feedback.service import FeedbackService
 from lexorchestrator_au.orchestration.orchestrator import LLMOrchestrator
 from lexorchestrator_au.rag.retrieval import RetrievalService
 from lexorchestrator_au.rag.types import RetrievalFilters
+
+logger = logging.getLogger(__name__)
 
 
 class QueryService:
@@ -56,10 +59,12 @@ class QueryService:
             trace_id=trace_id,
             explicit_query_type=request.query_type,
         )
-        citation_validation = self.attribution.validate_answer_citations(llm_response.answer, citations)
+        citation_validation = self.attribution.validate_answer_citations(
+            llm_response.answer, citations
+        )
         confidence = self.confidence.score(results, citations, llm_response.degraded)
         if citation_validation["unsupported_source_ids"]:
-            confidence = min(confidence, 0.55)
+            confidence = min(confidence, self.settings.unsupported_citation_confidence_cap)
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
         QUERY_LATENCY.observe(latency_ms / 1000)
 
@@ -109,5 +114,4 @@ class QueryService:
                 degraded=response.degraded,
             )
         except Exception:
-            # Feedback flywheel should not break live research responses.
-            return None
+            logger.exception("query_run_recording_failed")

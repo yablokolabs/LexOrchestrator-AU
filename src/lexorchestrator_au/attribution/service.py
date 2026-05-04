@@ -13,7 +13,9 @@ def clean_snippet(text: str, max_chars: int = 480) -> str:
 
 
 class AttributionService:
-    def build_citations(self, results: list[RetrievalResult], max_citations: int) -> list[dict[str, object]]:
+    def build_citations(
+        self, results: list[RetrievalResult], max_citations: int
+    ) -> list[dict[str, object]]:
         citations: list[dict[str, object]] = []
         seen: set[tuple[str, str]] = set()
         for idx, result in enumerate(results, start=1):
@@ -71,11 +73,17 @@ class AttributionService:
         return blocks
 
     @staticmethod
-    def validate_answer_citations(answer: str, citations: list[dict[str, object]]) -> dict[str, object]:
+    def validate_answer_citations(
+        answer: str, citations: list[dict[str, object]]
+    ) -> dict[str, object]:
         cited = sorted(set(re.findall(r"\[?(C\d+)\]?", answer)))
         allowed = {str(citation["citation_id"]) for citation in citations}
         unsupported = [citation_id for citation_id in cited if citation_id not in allowed]
-        return {"cited_source_ids": cited, "unsupported_source_ids": unsupported, "valid": not unsupported}
+        return {
+            "cited_source_ids": cited,
+            "unsupported_source_ids": unsupported,
+            "valid": not unsupported,
+        }
 
 
 class ConfidenceScorer:

@@ -22,5 +22,9 @@ class RetrievalService:
         limit: int,
     ) -> list[RetrievalResult]:
         query_embedding = await self.embeddings.embed_query(query)
-        results = await self.repository.hybrid_search(query, query_embedding, filters, limit=max(limit * 3, limit))
+        # Over-fetch 3x for reranking headroom
+        over_fetch = limit * 3
+        results = await self.repository.hybrid_search(
+            query, query_embedding, filters, limit=over_fetch
+        )
         return self.reranker.rerank(query, results, filters, limit=limit)

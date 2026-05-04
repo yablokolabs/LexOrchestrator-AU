@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
 class AdapterError(Exception):
@@ -14,9 +14,12 @@ class APIDriftError(AdapterError):
     """Provider response shape changed enough that parsing is unsafe."""
 
 
+class NonRetryableError(AdapterError):
+    """Error that will not succeed on retry (bad credentials, invalid request, etc.)."""
+
+
 @dataclass(slots=True)
 class LLMRequest:
-    query: str
     context_blocks: list[dict[str, Any]]
     jurisdiction: str
     query_type: str
@@ -37,14 +40,15 @@ class LLMResponse:
     finish_reason: str | None = None
 
 
+@runtime_checkable
 class LLMAdapter(Protocol):
     name: str
     version: str
     model: str
 
     @property
-    def is_available(self) -> bool:
-        ...
+    def is_available(self) -> bool: ...
 
-    async def generate(self, request: LLMRequest) -> LLMResponse:
-        ...
+    async def generate(self, request: LLMRequest) -> LLMResponse: ...
+
+    async def aclose(self) -> None: ...

@@ -1,8 +1,11 @@
+import logging
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -17,7 +20,7 @@ class Settings(BaseSettings):
     lex_api_keys: str = ""
     trust_proxy_headers: bool = False
 
-    database_url: str = "postgresql+asyncpg://lex:lex@localhost:5432/lexorchestrator"
+    database_url: str = ""
     auto_create_schema: bool = True
     redis_url: str | None = None
 
@@ -33,18 +36,27 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 384
     embedding_batch_size: int = 64
+    openai_embedding_max_batch: int = 2048
 
     llm_timeout_seconds: float = 25.0
     llm_retry_attempts: int = 3
     llm_retry_base_delay_seconds: float = 0.35
+    llm_max_backoff_seconds: float = 30.0
     circuit_breaker_failure_threshold: int = 4
     circuit_breaker_recovery_seconds: float = 45.0
+
+    anthropic_max_tokens: int = 4096
+    unsupported_citation_confidence_cap: float = 0.55
 
     retrieval_limit: int = 12
     max_citations: int = 6
     cache_ttl_seconds: int = 900
+    cache_max_entries: int = 10_000
     rate_limit_per_minute: int = 60
     rate_limit_burst: int = 20
+
+    vector_weight: float = 0.70
+    keyword_weight: float = 0.30
 
     supported_jurisdictions: list[str] = Field(default_factory=lambda: ["AU"])
 
@@ -56,6 +68,26 @@ class Settings(BaseSettings):
     @classmethod
     def normalise_jurisdictions(cls, values: list[str]) -> list[str]:
         return [value.upper() for value in values]
+
+    @model_validator(mode="after")
+    def _validate_production_safety(self) -> "Settings":
+        if self.app_env in ("staging", "production"):
+            if "*" in self.cors_origins:
+                raise ValueError(
+                    "Wildcard CORS origin ('*') is not allowed in staging/production. "
+                    "Set CORS_ORIGINS to explicit allowed origins."
+                )
+            if not self.parsed_api_keys:
+                raise ValueError(
+                    "API keys (LEX_API_KEYS) must be configured in staging/production."
+                )
+            if not self.database_url:
+                raise ValueError("DATABASE_URL must be explicitly set in staging/production.")
+        if not self.database_url:
+            if self.app_env in ("staging", "production"):
+                raise ValueError("DATABASE_URL must be explicitly set in staging/production.")
+            self.database_url = "postgresql+asyncpg://localhost:5432/lexorchestrator"
+        return self
 
 
 @lru_cache(maxsize=1)

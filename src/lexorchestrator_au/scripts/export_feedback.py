@@ -13,10 +13,9 @@ async def run(output_path: Path | None = None) -> None:
     engine = create_engine(settings)
     try:
         exporter = FineTuningDatasetExporter(create_session_factory(engine))
-        result = await exporter.export_jsonl(
+        await exporter.export_jsonl(
             output_path or PROJECT_ROOT / "exports" / "feedback_dataset.jsonl"
         )
-        print(result)
     finally:
         await engine.dispose()
 

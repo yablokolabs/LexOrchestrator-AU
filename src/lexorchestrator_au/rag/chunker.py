@@ -3,7 +3,10 @@ from collections.abc import Iterable
 
 from lexorchestrator_au.rag.types import DocumentChunk, SourceDocument
 
-SECTION_RE = re.compile(r"^(?P<label>(?:section|s\.?|part|division|chapter|schedule|clause|rule|article)\s+[\w.()-]+|[A-Z][A-Za-z\s]{3,80})\s*$", re.I)
+SECTION_RE = re.compile(
+    r"^(?P<label>(?:section|s\.?|part|division|chapter|schedule|clause|rule|article)\s+[\w.()-]+|[A-Z][A-Za-z]+(?:\s+[A-Za-z]+){0,5})\s*$",
+    re.I,
+)
 
 
 class LegalChunker:
